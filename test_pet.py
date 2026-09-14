@@ -5,9 +5,10 @@ import api_helpers
 from hamcrest import assert_that, contains_string, is_
 
 '''
-TODO: Finish this test by...
-1) Troubleshooting and fixing the test failure
-The purpose of this test is to validate the response matches the expected schema defined in schemas.py
+Validates the response for a single pet matches the expected schema defined in schemas.py.
+
+Bug found: schemas.py originally defined "name" as type "integer", but the API returns
+"name" as a string (e.g. "ranger"). Fixed by changing it to "type": "string".
 '''
 def test_pet_schema():
     test_endpoint = "/pets/1"
@@ -19,14 +20,14 @@ def test_pet_schema():
     # Validate the response schema against the defined schema in schemas.py
     validate(instance=response.json(), schema=schemas.pet)
 
+
 '''
-TODO: Finish this test by...
-1) Extending the parameterization to include all available statuses
-2) Validate the appropriate response code
-3) Validate the 'status' property in the response is equal to the expected status
-4) Validate the schema for each object in the response
+Extended to cover all three pet statuses. For each status, confirms:
+1) the request succeeds (200)
+2) every pet returned actually has the requested status
+3) every pet returned matches the pet schema
 '''
-@pytest.mark.parametrize("status", [("available")])
+@pytest.mark.parametrize("status", ["available", "sold", "pending"])
 def test_find_by_status_200(status):
     test_endpoint = "/pets/findByStatus"
     params = {
@@ -34,13 +35,27 @@ def test_find_by_status_200(status):
     }
 
     response = api_helpers.get_api_data(test_endpoint, params)
-    # TODO...
+
+    assert response.status_code == 200
+
+    pets = response.json()
+    for pet in pets:
+        assert_that(pet["status"], is_(status))
+        validate(instance=pet, schema=schemas.pet)
+
 
 '''
-TODO: Finish this test by...
-1) Testing and validating the appropriate 404 response for /pets/{pet_id}
-2) Parameterizing the test for any edge cases
+Validates that requesting a pet ID that does not exist returns a 404.
+Parametrized over a few edge cases:
+- a large ID that clearly doesn't exist
+- 0, which is a valid int but not one of the seeded pets
+- a negative ID (Flask's <int:> converter won't even match this, so this
+  exercises the routing-level 404 rather than the app's explicit api.abort(404, ...))
 '''
-def test_get_by_id_404():
-    # TODO...
-    pass
+@pytest.mark.parametrize("pet_id", [999, 3, -1])
+def test_get_by_id_404(pet_id):
+    test_endpoint = f"/pets/{pet_id}"
+
+    response = api_helpers.get_api_data(test_endpoint)
+
+    assert response.status_code == 404
